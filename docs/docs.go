@@ -28,6 +28,20 @@ const docTemplate = `{
                     "Subscription"
                 ],
                 "summary": "returns list of all subscriptions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "filter for concrete user",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "filter for concrete service",
+                        "name": "service_name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK"
@@ -69,7 +83,7 @@ const docTemplate = `{
         },
         "/api/v1/subscription/period-price/{period}": {
             "get": {
-                "description": "returns price of choosen subscription for period",
+                "description": "requests period of time in path, format \"mm-yyyy:{mm-yyyy}\", where right side might be ommited and autoreplaced with time.Now()\nquery params 'user_id' and 'service_name' used as filter for request",
                 "consumes": [
                     "application/json"
                 ],
@@ -83,6 +97,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "07-2025:08-2025",
                         "description": "period",
                         "name": "period",
                         "in": "path",
@@ -158,6 +173,15 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Subscription",
+                        "name": "subscription",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/database.Subscription"
+                        }
                     }
                 ],
                 "responses": {

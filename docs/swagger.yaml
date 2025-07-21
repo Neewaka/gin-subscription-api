@@ -27,6 +27,15 @@ paths:
       consumes:
       - application/json
       description: returns list of all subscriptions
+      parameters:
+      - description: filter for concrete user
+        in: query
+        name: user_id
+        type: integer
+      - description: filter for concrete service
+        in: query
+        name: service_name
+        type: string
       produces:
       - application/json
       responses:
@@ -105,6 +114,12 @@ paths:
         name: id
         required: true
         type: integer
+      - description: Subscription
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/database.Subscription'
       produces:
       - application/json
       responses:
@@ -119,9 +134,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: returns price of choosen subscription for period
+      description: |-
+        requests period of time in path, format "mm-yyyy:{mm-yyyy}", where right side might be ommited and autoreplaced with time.Now()
+        query params 'user_id' and 'service_name' used as filter for request
       parameters:
       - description: period
+        example: 07-2025:08-2025
         in: path
         name: period
         required: true

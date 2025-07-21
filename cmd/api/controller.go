@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gin-subscription/internal/database"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -48,7 +49,7 @@ func (app *application) createSubscription(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id	path		int	true	"Subscription id"
-//	@Success		200				{object}	database.Subscription
+//	@Success		200	{object}	database.Subscription
 //	@Router			/api/v1/subscription/{id} [get]
 func (app *application) getSubscription(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -79,11 +80,13 @@ func (app *application) getSubscription(c *gin.Context) {
 //	@Tags			Subscription
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int	true	"Subscription id"
+//	@Param			id				path		int						true	"Subscription id"
 //	@Param			subscription	body		database.Subscription	true	"Subscription"
 //	@Success		200				{object}	database.Subscription
 //	@Router			/api/v1/subscription/{id} [put]
 func (app *application) updateSubscription(c *gin.Context) {
+	slog.Info("Method updateSubscription in controller", "id", c.Param("id"))
+
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
@@ -128,10 +131,12 @@ func (app *application) updateSubscription(c *gin.Context) {
 //	@Tags			Subscription
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int	true	"Subscription id"
+//	@Param			id	path	int	true	"Subscription id"
 //	@Success		204
 //	@Router			/api/v1/subscription/{id} [delete]
 func (app *application) deleteSubscription(c *gin.Context) {
+	slog.Info("Method deleteSubscription in controller", "id", c.Param("id"))
+
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
@@ -164,10 +169,27 @@ func (app *application) deleteSubscription(c *gin.Context) {
 //	@Tags			Subscription
 //	@Accept			json
 //	@Produce		json
+//	@Param			user_id			query	int		false	"filter for concrete user"
+//	@Param			service_name	query	string	false	"filter for concrete service"
 //	@Success		200
 //	@Router			/api/v1/subscription [get]
 func (app *application) listSubscription(c *gin.Context) {
-	events, err := app.models.Subscriptions.GetList()
+	slog.Info("Method listSubscription in controller", "query_filter", c.Request.URL.Query())
+
+	filter := make(map[string]string)
+	if u := c.Query("user_id"); u != "" {
+		_, err := strconv.Atoi(u)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid filter type"})
+			return
+		}
+		filter["user_id"] = u
+	}
+	if s := c.Query("service_name"); s != "" {
+		filter["service_name"] = s
+	}
+
+	events, err := app.models.Subscriptions.GetList(filter)
 
 	if err != nil {
 		fmt.Println(err)
@@ -178,19 +200,21 @@ func (app *application) listSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, events)
 }
 
-// getPeriodPrice returns price of choosen subscription for period
+// getPeriodPrice returns price of chosen subscription for period
 //
-//		@Summary		returns price of choosen subscription for period
-//		@Description	returns price of choosen subscription for period
-//		@Tags			Subscription
-//		@Accept			json
-//		@Produce		json
-//		@Param			period	path		string	true	"period"
-//	 @Param			user_id		query	int		false 	"filter for concrete user"
-//	 @Param			service_name		query	string		false 	"filter for concrete service"
-//		@Success		200
-//		@Router			/api/v1/subscription/period-price/{period} [get]
+//	@Summary		returns price of choosen subscription for period
+//	@Description	requests period of time in path, format "mm-yyyy:{mm-yyyy}", where right side might be ommited and autoreplaced with time.Now()
+//	@Description	query params 'user_id' and 'service_name' used as filter for request
+//	@Tags			Subscription
+//	@Accept			json
+//	@Produce		json
+//	@Param			period			path	string	true	"period"	example(07-2025:08-2025)
+//	@Param			user_id			query	int		false	"filter for concrete user"
+//	@Param			service_name	query	string	false	"filter for concrete service"
+//	@Success		200
+//	@Router			/api/v1/subscription/period-price/{period} [get]
 func (app *application) getPeriodPrice(c *gin.Context) {
+	slog.Info("Method getPeriodPrice in controller", "period", c.Param("period"), "query_filter", c.Request.URL.Query())
 
 	periodSlice := strings.Split(c.Param("period"), ":")
 	var periodTime []time.Time
@@ -222,12 +246,12 @@ func (app *application) getPeriodPrice(c *gin.Context) {
 		filter["service_name"] = s
 	}
 
-	price, err := app.models.Subscriptions.GetPrice(start, end, filter)
+	total, prices, err := app.models.Subscriptions.GetPrice(start, end, filter)
 	if err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retreive price"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"int": price})
+	c.JSON(http.StatusOK, gin.H{"total price": total, "prices": prices})
 }

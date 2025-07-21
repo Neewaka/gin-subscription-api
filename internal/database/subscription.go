@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ func parseGetDate(start, end string) (parsedStart *string, parsedEnd *string, er
 	if end != "" {
 		endTime, err := time.Parse("01-2006", end)
 		if err != nil {
+			slog.Error("ERROR in Subscription parseGetDate", "error", err)
 			return nil, nil, err
 		}
 
@@ -35,6 +37,7 @@ func parseGetDate(start, end string) (parsedStart *string, parsedEnd *string, er
 
 	startTime, err := time.Parse("01-2006", start)
 	if err != nil {
+		slog.Error("ERROR in Subscription parseGetDate", "error", err)
 		return nil, nil, err
 	}
 	startDate := fmt.Sprintf("'%s'", startTime.Format("2006-01-02"))
@@ -48,6 +51,7 @@ func (m *SubscriptionModel) Insert(sub *Subscription) error {
 
 	startDate, endDate, err := parseGetDate(sub.StartDate, sub.EndDate)
 	if err != nil {
+		slog.Error("ERROR in Subscription Insert", "error", err)
 		return err
 	}
 
@@ -71,6 +75,7 @@ func (m *SubscriptionModel) Get(id int) (*Subscription, error) {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
+		slog.Error("ERROR in Subscription Get", "error", err)
 		return nil, err
 	}
 
@@ -90,6 +95,7 @@ func (m *SubscriptionModel) Update(sub *Subscription) error {
 
 	startDate, endDate, err := parseGetDate(sub.StartDate, sub.EndDate)
 	if err != nil {
+		slog.Error("ERROR in Subscription Update", "error", err)
 		return err
 	}
 
@@ -97,6 +103,7 @@ func (m *SubscriptionModel) Update(sub *Subscription) error {
 
 	_, err = m.DB.Exec(ctx, query, sub.ServiceName, sub.Price, sub.UserId, sub.Id)
 	if err != nil {
+		slog.Error("ERROR in Subscription Update", "error", err)
 		return err
 	}
 
@@ -111,20 +118,33 @@ func (m *SubscriptionModel) Delete(id int) error {
 
 	_, err := m.DB.Exec(ctx, query, id)
 	if err != nil {
+		slog.Error("ERROR in Subscription Delete", "error", err)
 		return err
 	}
 
 	return nil
 }
 
-func (m *SubscriptionModel) GetList() ([]*Subscription, error) {
+func (m *SubscriptionModel) GetList(filter map[string]string) ([]*Subscription, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := "SELECT * FROM subscription"
+	var filterSB strings.Builder
+	for k, v := range filter {
+		var str string
+		if filterSB.Len() == 0 {
+			str = fmt.Sprintf("WHERE %s = '%s'", k, v)
+		} else {
+			str = fmt.Sprintf("AND %s = '%s'", k, v)
+		}
+		filterSB.WriteString(str)
+	}
+
+	query := fmt.Sprintf("SELECT * FROM subscription %s", filterSB.String())
 
 	rows, err := m.DB.Query(ctx, query)
 	if err != nil {
+		slog.Error("ERROR in Subscription GetList", "error", err)
 		return nil, err
 	}
 
@@ -140,6 +160,7 @@ func (m *SubscriptionModel) GetList() ([]*Subscription, error) {
 
 		err := rows.Scan(&sub.Id, &sub.ServiceName, &sub.Price, &sub.UserId, &startTime, &endTime)
 		if err != nil {
+			slog.Error("ERROR in Subscription GetList", "error", err)
 			return nil, err
 		}
 		sub.StartDate = startTime.Format("01-2006")
@@ -153,16 +174,18 @@ func (m *SubscriptionModel) GetList() ([]*Subscription, error) {
 	}
 
 	if err = rows.Err(); err != nil {
+		slog.Error("ERROR in Subscription GetList", "error", err)
 		return nil, err
 	}
 
 	return subs, nil
 }
 
-func (m *SubscriptionModel) GetPrice(startPeriodInput, endPeriodInput time.Time, filter map[string]string) (price int, err error) {
+func (m *SubscriptionModel) GetPrice(startPeriodInput, endPeriodInput time.Time, filter map[string]string) (totalPrice int, prices map[int]string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	prices = make(map[int]string)
 	var filterSB strings.Builder
 	for k, v := range filter {
 		str := fmt.Sprintf(" AND %s = '%s'", k, v)
@@ -182,7 +205,8 @@ func (m *SubscriptionModel) GetPrice(startPeriodInput, endPeriodInput time.Time,
 
 	rows, err := m.DB.Query(ctx, query)
 	if err != nil {
-		return 0, err
+		slog.Error("ERROR in Subscription GetPrice", "error", err)
+		return totalPrice, prices, err
 	}
 
 	for rows.Next() {
@@ -193,18 +217,14 @@ func (m *SubscriptionModel) GetPrice(startPeriodInput, endPeriodInput time.Time,
 		endSub := endPeriodInput
 		err := rows.Scan(&sub.Id, &sub.ServiceName, &sub.Price, &sub.UserId, &startSub, &endAny)
 		if err != nil {
-			return 0, err
+			slog.Error("ERROR in Subscription GetPrice", "error", err)
+			return totalPrice, prices, err
 		}
 
 		t, ok := endAny.(time.Time)
 		if ok {
 			endSub = t
 		}
-
-		// fmt.Println("period before update")
-		// fmt.Println(startPeriodInput, endPeriodInput)
-		// fmt.Println("time before update")
-		// fmt.Println(startSub, endSub)
 
 		startPeriod := startPeriodInput
 		if startSub.After(startPeriod) {
@@ -216,22 +236,16 @@ func (m *SubscriptionModel) GetPrice(startPeriodInput, endPeriodInput time.Time,
 			endPeriod = endSub
 		}
 
-		// fmt.Println("period after update")
-		// fmt.Println(startPeriod, endPeriod)
-
 		y1, m1, _ := endPeriod.Date()
 		y2, m2, _ := startPeriod.Date()
-		// fmt.Printf("\n y1 %d, m1 %d, y1 %d, m2 %d", y1, int(m1), y2, int(m2))
 
 		months := (y1-y2)*12 + int(m1) - int(m2)
 
-		// fmt.Printf("\n months is %d, id %d, price %d", months, sub.Id, sub.Price)
-
-		// fmt.Printf("\n ID %d price change %d, months %d", sub.Id, months*sub.Price, months)
-		price += months * sub.Price
+		prices[sub.Id] = fmt.Sprintf("service_name: %s, months: %d, price: %d, user_id: %d, total_price: %d", sub.ServiceName, months, sub.Price, sub.UserId, months*sub.Price)
+		totalPrice += months * sub.Price
 	}
 
 	defer rows.Close()
 
-	return price, nil
+	return totalPrice, prices, nil
 }
