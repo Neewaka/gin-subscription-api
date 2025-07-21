@@ -1,0 +1,145 @@
+definitions:
+  database.Subscription:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: integer
+      price:
+        type: integer
+      service_name:
+        type: string
+      start_date:
+        type: string
+      user_id:
+        type: integer
+    required:
+    - price
+    - service_name
+    - start_date
+    - user_id
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/subscription:
+    get:
+      consumes:
+      - application/json
+      description: returns list of all subscriptions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: returns list of all subscriptions
+      tags:
+      - Subscription
+    post:
+      consumes:
+      - application/json
+      description: creates new subscription
+      parameters:
+      - description: Name of subscription provider
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/database.Subscription'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.Subscription'
+      summary: creates new subscription
+      tags:
+      - Subscription
+  /api/v1/subscription/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: deletes existing subscription
+      parameters:
+      - description: Subscription id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      summary: deletes existing subscription
+      tags:
+      - Subscription
+    get:
+      consumes:
+      - application/json
+      description: returns single subscription
+      parameters:
+      - description: Subscription id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Subscription'
+      summary: returns single subscription
+      tags:
+      - Subscription
+    put:
+      consumes:
+      - application/json
+      description: updates existing subscription
+      parameters:
+      - description: Subscription id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Subscription'
+      summary: updates existing subscription
+      tags:
+      - Subscription
+  /api/v1/subscription/period-price/{period}:
+    get:
+      consumes:
+      - application/json
+      description: returns price of choosen subscription for period
+      parameters:
+      - description: period
+        in: path
+        name: period
+        required: true
+        type: string
+      - description: filter for concrete user
+        in: query
+        name: user_id
+        type: integer
+      - description: filter for concrete service
+        in: query
+        name: service_name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: returns price of choosen subscription for period
+      tags:
+      - Subscription
+swagger: "2.0"
